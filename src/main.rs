@@ -1,12 +1,12 @@
 use clap::{Parser, Subcommand};
 use anyhow::{anyhow, Result};
-use reqwest::Url;
-use std::str::FromStr;
+use reqwest::{header, Client, Response, Url};
+use std::{collections::HashMap, str::FromStr};
 
 // A naive httpie implementation with Rust, can you imagine how easy it is?
 #[derive(Parser, Debug)]
 #[clap(author = "MrBanana <tomsawyer404@outlook.com>", version = "1.0" )]
-struct Cli {
+struct Opts {
     #[clap(subcommand)]
     command: SubCommands,
 }
@@ -70,15 +70,31 @@ fn parse_kv_pair(s: &str) -> Result<KvPair> {
     Ok(s.parse()?)
 }
 
-fn main() {
-    let cli = Cli::parse();
+async fn get(client: Client, args: &Get) -> Result<()> {
+    let resp = client.get(&args.url).send().await?;
+    println!("{:?}", resp.text().await?);
+    Ok(())
+}
 
-    println!("{:?}", cli);
-    // You can check for the existence of subcommands, and if found use their
-    // matches just as you would the top level app
-    //match &cli.command {
-    //    Commands::Add { name } => {
-    //        println!("'myapp add' was used, name is: {:?}", name)
-    //    }
-    //}
+async fn post(client: Client, args: &Post) -> Result<()> {
+    let mut body = HashMap::new();
+    for pair in args.body.iter() {
+        body.insert(&pair.k, &pair.v);
+    }
+
+    let resp = client.post(&args.url).json(&body).send().await?;
+    println!("{:?}", resp.text().await?);
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let opts = Opts::parse();
+    let client = Client::new();
+    let result = match opts.command {
+        SubCommands::Get(ref args) => get(client, args).await?,
+        SubCommands::Post(ref args) => post(client, args).await?
+    };
+
+    Ok(())
 }
