@@ -4,6 +4,12 @@ use colored::Colorize;
 use reqwest::{header, Client, Response, Url};
 use mime::Mime;
 use std::{collections::HashMap, str::FromStr};
+use syntect::{
+    easy::HighlightLines,
+    parsing::SyntaxSet,
+    highlighting::{ThemeSet, Style},
+    util::{as_24_bit_terminal_escaped, LinesWithEndings}
+};
 
 // A naive httpie implementation with Rust, can you imagine how easy it is?
 #[derive(Parser, Debug)]
@@ -107,9 +113,26 @@ fn print_headers(resp: &Response) {
 fn print_body(m: Option<Mime>, body: &str) {
     match m {
         Some(v) if v == mime::APPLICATION_JSON => {
-            println!("{}", jsonxf::pretty_print(body).unwrap().cyan());
+            //println!("{}", jsonxf::pretty_print(body).unwrap().cyan());
+            print_syntect(body);
+            print!("\x1b[0m");
         }
         _ => println!("{}", body)
+    }
+}
+
+fn print_syntect(s: &str) {
+    // Load these once at the start of your program
+    let ps = SyntaxSet::load_defaults_newlines();
+    let ts = ThemeSet::load_defaults();
+
+    let syntax = ps.find_syntax_by_extension("json").unwrap();
+    let mut h = HighlightLines::new(syntax, &ts.themes["base16-mocha.dark"]);
+
+    for line in LinesWithEndings::from(s) {
+        let ranges: Vec<(Style, &str)> = h.highlight(line, &ps);
+        let escaped = as_24_bit_terminal_escaped(&ranges[..], true);
+        print!("{}", escaped);
     }
 }
 
