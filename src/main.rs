@@ -1,6 +1,8 @@
 use clap::{Parser, Subcommand};
 use anyhow::{anyhow, Result};
+use colored::Colorize;
 use reqwest::{header, Client, Response, Url};
+use mime::Mime;
 use std::{collections::HashMap, str::FromStr};
 
 // A naive httpie implementation with Rust, can you imagine how easy it is?
@@ -72,8 +74,8 @@ fn parse_kv_pair(s: &str) -> Result<KvPair> {
 
 async fn get(client: Client, args: &Get) -> Result<()> {
     let resp = client.get(&args.url).send().await?;
-    println!("{:?}", resp.text().await?);
-    Ok(())
+    //println!("{:?}", resp.text().await?);
+    Ok(print_resp(resp).await?)
 }
 
 async fn post(client: Client, args: &Post) -> Result<()> {
@@ -83,18 +85,65 @@ async fn post(client: Client, args: &Post) -> Result<()> {
     }
 
     let resp = client.post(&args.url).json(&body).send().await?;
-    println!("{:?}", resp.text().await?);
+    //println!("{:?}", resp.text().await?);
+    Ok(print_resp(resp).await?)
+}
+
+/// Display the version of server and status code
+fn print_status(resp: &Response) {
+    let status = format!("{:?} {}", resp.version(), resp.status()).blue();
+    println!("{}\n", status);
+}
+
+/// Display the HTTP header returned from server
+fn print_headers(resp: &Response) {
+    for (name, value) in resp.headers() {
+        println!("{}: {:?}", name.to_string().green(), value);
+    }
+    println!();
+}
+
+/// Display the HTTP body returned from server
+fn print_body(m: Option<Mime>, body: &String) {
+    match m {
+        Some(v) if v == mime::APPLICATION_JSON => {
+            println!("{}", jsonxf::pretty_print(body).unwrap().cyan());
+        }
+        _ => println!("{}", body)
+    }
+}
+
+/// Display the whole respon
+async fn print_resp(resp: Response) -> Result<()> {
+    print_status(&resp);
+    print_headers(&resp);
+    let mime = get_content_type(&resp);
+    let body = resp.text().await?;
+    print_body(mime, &body);
     Ok(())
+}
+
+/// Parse `content-type` to MIME type
+fn get_content_type(resp: &Response) -> Option<Mime> {
+    resp.headers()
+        .get(header::CONTENT_TYPE)
+        .map(|v| v.to_str().unwrap().parse().unwrap())
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts = Opts::parse();
-    let client = Client::new();
+    let mut headers = header::HeaderMap::new();
+
+    headers.insert("X-POWERED-BY", "Rust".parse()?);
+    headers.insert(header::USER_AGENT, "Rust HTTPie".parse()?);
+    let client = reqwest::Client::builder()
+        .default_headers(headers)
+        .build()?;
     let result = match opts.command {
         SubCommands::Get(ref args) => get(client, args).await?,
         SubCommands::Post(ref args) => post(client, args).await?
     };
 
-    Ok(())
+    Ok(result)
 }
