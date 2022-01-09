@@ -55,7 +55,7 @@ impl FromStr for KvPair {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // use `=` to split, we will get a iterator
-        let mut split = s.split("=");
+        let mut split = s.split('=');
         let err = || anyhow!(format!("Failed to parse {}", s));
         Ok(Self{
             // Get first result from iterator as `key`, the iterator return `Some(T)/None`
@@ -69,7 +69,7 @@ impl FromStr for KvPair {
 }
 
 fn parse_kv_pair(s: &str) -> Result<KvPair> {
-    Ok(s.parse()?)
+    s.parse()
 }
 
 async fn get(client: Client, args: &Get) -> Result<()> {
@@ -104,7 +104,7 @@ fn print_headers(resp: &Response) {
 }
 
 /// Display the HTTP body returned from server
-fn print_body(m: Option<Mime>, body: &String) {
+fn print_body(m: Option<Mime>, body: &str) {
     match m {
         Some(v) if v == mime::APPLICATION_JSON => {
             println!("{}", jsonxf::pretty_print(body).unwrap().cyan());
